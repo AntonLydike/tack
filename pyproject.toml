@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "tack"
+version = "0.1.0"
+description = "CLI Tool for Paper Management"
+authors = ["Anton Lydike <me@antonlydike.de>"]
+license = "AGPL-3.0"
+readme = "README.md"
+
+[tool.poetry.scripts]
+tack = "tack.cli:main"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+crossrefapi = "^1.6.0"
+pyyaml = "^6.0.2"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8.0"
+pytest = "^8.3.3"
+pyright = "^1.1.380"
+pre-commit = "^3.8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
