@@ -1,3 +1,4 @@
+import json
 import os.path
 
 from tack import db
@@ -127,6 +128,9 @@ class CLI:
             case ("list", _):
                 self.list()
                 return 0
+            case ("read-md", [doi]):
+                self.read_md(normalize_doi(doi))
+                return 0
             case ("help", _):
                 CLI.help()
                 return 0
@@ -137,6 +141,35 @@ class CLI:
     @classmethod
     def help(self):
         pass
+
+    def read_md(self, doi: str):
+        repo_dir = db.get_paper_dir()
+        agency, number = path_safe_doi(doi)
+        doc = read_markdown(os.path.join(repo_dir, agency, f"{number}.md"))
+
+        with db.cursor() as cur:
+            cur.execute(
+                "UPDATE papers SET title = ?, conference = ?, year = ?, abstract = ?, url = ? WHERE doi = ?",
+                (
+                    doc.title,
+                    doc.meta["conference"],
+                    doc.meta["year"],
+                    doc.abstract,
+                    doc.meta["url"],
+                    doi,
+                ),
+            )
+            non_special_attrs = {"aliases", "authors", "conference", "year", "url"}
+            cur.execute("DELETE FROM tags WHERE doi = ?", (doi,))
+
+            for key, val in doc.meta.items():
+                if key in non_special_attrs:
+                    continue
+                cur.execute(
+                    "INSERT OR REPLACE INTO tags (`doi`, `name`, `value`) VALUES (?,?,?)",
+                    (doi, key, json.dumps(val)),
+                )
+                print(f"Read metadata {key} = {val}")
 
 
 def build_paper_meta_dict(
@@ -157,7 +190,7 @@ def build_paper_meta_dict(
         "conference": conference,
         "authors": [a.name for a in authors],
         "url": url,
-        **dict(extra_tags),
+        **dict((k, json.loads(v)) for k, v in extra_tags),
     }
 
 
