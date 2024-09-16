@@ -6,6 +6,7 @@ from tack.api import BaseAPI, CrossRefApi
 from tack.colors import FMT
 from tack.docs import MarkdownFile, write_markdown, build_refs, read_markdown
 from tack.helpers import path_safe_doi, normalize_doi
+import argparse
 
 
 class CLI:
@@ -100,7 +101,11 @@ class CLI:
 
         print("Removed paper from db, not removing local file though.")
 
-    def list(self):
+    def list(self, args: list[str]):
+        parser = argparse.ArgumentParser("tack list")
+        parser.add_argument("--json", action="store_true")
+        opts = parser.parse_args(args)
+
         with db.cursor() as cur:
             cur.execute("SELECT doi, title, conference, year FROM papers")
 
@@ -109,7 +114,19 @@ class CLI:
                     doi, title, conference, year = [
                         x if x is not None else "-" for x in line
                     ]
-                    print(f"{doi:<32} | {conference:<25} | {year:>4} | {title}")
+                    if opts.json:
+                        print(
+                            json.dumps(
+                                dict(
+                                    doi=doi,
+                                    conference=conference,
+                                    year=year,
+                                    title=title,
+                                )
+                            )
+                        )
+                    else:
+                        print(f"{doi:<32} | {conference:<25} | {year:>4} | {title}")
 
     def run(self, cmd: str, *args: str) -> int:
         match (cmd, args):
@@ -125,8 +142,8 @@ class CLI:
             case ("delete", [doi]):
                 self.remove(normalize_doi(doi))
                 return 0
-            case ("list", _):
-                self.list()
+            case ("list", args):
+                self.list(args)
                 return 0
             case ("read-md", [doi]):
                 self.read_md(normalize_doi(doi))
