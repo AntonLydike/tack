@@ -145,7 +145,14 @@ class CLI:
     def read_md(self, doi: str):
         repo_dir = db.get_paper_dir()
         agency, number = path_safe_doi(doi)
-        doc = read_markdown(os.path.join(repo_dir, agency, f"{number}.md"))
+        fpath = os.path.join(repo_dir, agency, f"{number}.md")
+        doc = read_markdown(fpath)
+
+        if doc is None:
+            print(
+                f'{FMT.RED | FMT.BOLD}Error: Could not locate file at "{fpath}"{FMT.RESET}'
+            )
+            return
 
         with db.cursor() as cur:
             cur.execute(
