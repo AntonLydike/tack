@@ -6,10 +6,10 @@ import os
 from dataclasses import dataclass
 
 import yaml
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Generator
 from typing import Callable
 
-from tack import db
+from tack import db, models, helpers
 
 
 @dataclass
@@ -37,11 +37,7 @@ class MarkdownFile:
     """
 
 
-def read_markdown(doi: str) -> MarkdownFile | None:
-    folder = db.get_paper_dir()
-    agency, id = doi.split("/", maxsplit=1)
-    path = os.path.join(folder, agency, f"{id}.md")
-
+def read_markdown(path) -> MarkdownFile | None:
     if not os.path.exists(path):
         return None
 
@@ -87,7 +83,7 @@ class MarkdownLinesParser:
         self.lines = Peekable(iter(lines))
         self.fname = fname
 
-    def parse(self):
+    def parse(self) -> MarkdownFile:
         meta = self.parse_meta()
         title = self.parse_title()
         abstract = self.parse_abstract()
@@ -120,7 +116,7 @@ class MarkdownLinesParser:
         if not self.lines.peek().strip().startswith("# "):
             raise ParseError(f"Expected title here, got: {self.lines.peek()}")
 
-        return next(self.lines).removeprefix("# ").strip('\n')
+        return next(self.lines).removeprefix("# ").strip("\n")
 
     def parse_abstract(self) -> str | None:
         self._take_empty()
@@ -129,7 +125,7 @@ class MarkdownLinesParser:
         # eat hading
         next(self.lines)
         abstract = self._take_while(lambda x: not x.strip().startswith("## "))
-        return "\n".join(abstract).strip('\n')
+        return "\n".join(abstract).strip("\n")
 
     def parse_notes(self) -> str | None:
         self._take_empty()
@@ -139,7 +135,7 @@ class MarkdownLinesParser:
         # eat hading
         next(self.lines)
         notes = self._take_while(lambda x: not x.strip().startswith("## "))
-        return "\n".join(notes).strip('\n')
+        return "\n".join(notes).strip("\n")
 
     def parse_references(self) -> list[str]:
         self._take_empty()
@@ -148,7 +144,9 @@ class MarkdownLinesParser:
         # eat heading
         next(self.lines)
 
-        references = self._take_while(lambda x: x is not None and x.strip().startswith("- "))
+        references = self._take_while(
+            lambda x: x is not None and x.strip().startswith("- ")
+        )
         return references
 
     def _take_while(self, pred: Callable[[str], bool]):
@@ -160,3 +158,38 @@ class MarkdownLinesParser:
 
     def _take_empty(self):
         self._take_while(lambda x: not x.strip())
+
+
+def write_markdown(doc: MarkdownFile):
+    with open(doc.path, "w") as f:
+        f.write(f"---\n{yaml.safe_dump(doc.meta)}---")
+        f.write(f"\n# {doc.title}")
+        if doc.abstract:
+            f.write(f"\n\n## Abstract:\n{doc.abstract}")
+        f.write(f"\n\n## Notes:\n{doc.notes}")
+        f.write(f"\n\n## References:\n")
+        f.write("\n".join(doc.references))
+
+
+def build_refs(cites: list[models.Citation]) -> Generator[str, None, None]:
+    for cite in cites:
+        suffix = " ("
+        if cite.author:
+            suffix += f"{cite.author} et. al. "
+        if cite.journal:
+            suffix += f"at {cite.journal} "
+        if cite.year:
+            suffix += f"- {cite.year}"
+        if suffix == " (":
+            suffix = ""
+        else:
+            suffix += ")"
+
+        if cite.doi:
+            fancy = ""
+            safe_doi = "/".join(helpers.path_safe_doi(cite.doi))
+            if cite.title:
+                fancy = f"|{cite.title}"
+            yield f"- [[{safe_doi}{fancy}]]{suffix}"
+        elif cite.title:
+            yield f"- {cite.title}{suffix}"

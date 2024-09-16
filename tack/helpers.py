@@ -1,5 +1,6 @@
 import html.parser
 import random
+import re
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -52,3 +53,17 @@ class RateLimiter:
             time.sleep(0.01)
         self.bucket_count += 1
         yield
+
+
+def path_safe_doi(doi: str) -> tuple[str, str]:
+    """
+    Split the DOI into agency and number, and replace all path-unsafe characters in the DOI with `_`
+
+    Let's hope there are no name clashes lol.
+    """
+    agency, number = doi.split("/", maxsplit=1)
+    return agency, re.sub(r"[:/]", "_", number)
+
+
+def normalize_doi(doi: str) -> str:
+    return doi.upper()

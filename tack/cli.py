@@ -1,12 +1,10 @@
 import os.path
-import re
-
-import yaml
 
 from tack import db
 from tack.api import BaseAPI, CrossRefApi
 from tack.colors import FMT
-from crossref.restful import Works, Etiquette
+from tack.docs import MarkdownFile, write_markdown, build_refs, read_markdown
+from tack.helpers import path_safe_doi, normalize_doi
 
 
 class CLI:
@@ -49,7 +47,7 @@ class CLI:
 
     def create_note(self, doi: str):
         repo_dir = db.get_paper_dir()
-        agency, number = doi.split('/', 1)
+        agency, number = path_safe_doi(doi)
         os.makedirs(os.path.join(repo_dir, agency), exist_ok=True)
 
         with db.cursor() as cur:
@@ -66,53 +64,38 @@ class CLI:
 
         authors = db.get_authors(doi)
 
-        with open(os.path.join(repo_dir, agency, f"{number}.md"), "w") as f:
-            yaml_str = yaml.safe_dump(
-                build_paper_meta_dict(
-                    doi,
-                    title,
-                    year,
-                    conference,
-                    authors,
-                    url,
-                )
-            )
-            f.write(f"""---\n{yaml_str}\n---""")
-            f.write(f"\n# {title}")
+        doc = MarkdownFile(
+            os.path.join(repo_dir, agency, f"{number}.md"),
+            build_paper_meta_dict(
+                doi,
+                title,
+                year,
+                conference,
+                authors,
+                url,
+            ),
+            title,
+            abstract,
+            "",
+            list(build_refs(db.get_paper_citations(doi))),
+        )
 
-            if abstract:
-                f.write("\n## Abstract\n")
-                f.write(abstract)
-            f.write("\n## Notes\n")
-            f.write("\n## References\n")
-            for cite in db.get_paper_citations(doi):
-                suffix = " ("
-                if cite.author:
-                    suffix += f"{cite.author} et. al. "
-                if cite.journal:
-                    suffix += f"at {cite.journal} "
-                if cite.year:
-                    suffix += f"- {cite.year}"
-                if suffix == " (":
-                    suffix = ""
-                else:
-                    suffix += ")"
+        # don't overwrite added metadata and notes
+        if (existing_doc := read_markdown(doc.path)) is not None:
+            print("loading notes and metadata from existing doc...")
+            doc.notes = existing_doc.notes
+            doc.meta = {**existing_doc.meta, **doc.meta}
 
-                if cite.doi:
-                    fancy = ""
-                    if cite.title:
-                        fancy = f"|{cite.title}"
-                    f.write(f"- [[{cite.doi}{fancy}]]{suffix}\n")
-                elif cite.title:
-                    f.write(f"- {cite.title}{suffix}\n")
+        write_markdown(doc)
+
         print("Generated paper entry!")
 
     def remove(self, doi: str):
         with db.cursor() as cur:
             cur.execute("DELETE FROM paper_authors WHERE doi = ?", (doi,))
-            cur.execute("DELETE FROM tags WHERE doi = ?", (doi, ))
-            cur.execute("DELETE FROM cites WHERE source_doi = ?", (doi, ))
-            cur.execute("DELETE FROM papers WHERE doi = ?", (doi, ))
+            cur.execute("DELETE FROM tags WHERE doi = ?", (doi,))
+            cur.execute("DELETE FROM cites WHERE source_doi = ?", (doi,))
+            cur.execute("DELETE FROM papers WHERE doi = ?", (doi,))
 
         print("Removed paper from db, not removing local file though.")
 
@@ -133,13 +116,13 @@ class CLI:
                 self.migrate_db()
                 return 0
             case ("add", [doi]):
-                self.add(doi)
+                self.add(normalize_doi(doi))
                 return 0
             case ("remove", [doi]):
-                self.remove(doi)
+                self.remove(normalize_doi(doi))
                 return 0
             case ("delete", [doi]):
-                self.remove(doi)
+                self.remove(normalize_doi(doi))
                 return 0
             case ("list", _):
                 self.list()
@@ -180,12 +163,11 @@ def build_paper_meta_dict(
 
 def main():
     import sys
+
     if len(sys.argv) < 2:
         CLI.help()
         sys.exit(1)
 
     name, cmd, *args = sys.argv
 
-    sys.exit(
-        CLI(name).run(cmd, *args)
-    )
+    sys.exit(CLI(name).run(cmd, *args))

@@ -82,7 +82,6 @@ def add_authors(doi: str, authors: list[AuthorOfPaper]):
 
 
 def add_citations(doi: str, citations: list[Citation]):
-    print(citations)
     with cursor() as cur:
         cur.executemany(
             "INSERT INTO cites (source_doi, title, journal, doi, year, author) VALUES (?,?,?,?,?,?)",
