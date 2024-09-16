@@ -66,4 +66,8 @@ def path_safe_doi(doi: str) -> tuple[str, str]:
 
 
 def normalize_doi(doi: str) -> str:
+    # allow pasting DOIs as URLs
+    if doi.startswith('http'):
+        match = re.search('\d\d\.[\d.]+/[^/]+', doi)
+        doi = match.group(0)
     return doi.upper()
