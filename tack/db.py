@@ -108,7 +108,7 @@ def get_authors(doi: str) -> list[AuthorOfPaper]:
             "SELECT authors.`id`, authors.`orcid`, authors.`name`, paper_authors.`affiliation` "
             "FROM authors JOIN paper_authors ON authors.id = paper_authors.author_id "
             "WHERE paper_authors.doi = ? "
-            "ORDER BY paper_authors.idx DESC",
+            "ORDER BY paper_authors.idx",
             (doi,),
         ).fetchall()
     return [AuthorOfPaper(*args) for args in authors]

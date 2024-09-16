@@ -1,6 +1,6 @@
 import json
-import os
-import time
+import re
+import sys
 from abc import ABC, abstractmethod
 from functools import lru_cache
 from typing import ClassVar
@@ -17,15 +17,19 @@ from tack import db, helpers
 class BaseAPI(ABC):
     API_NAME: ClassVar[str]
 
+    @abstractmethod
     def paper_by_doi(self, doi: str) -> Paper | None:
         raise NotImplementedError()
 
+    @abstractmethod
     def citations_by_doi(self, doi: str) -> list[Citation]:
         raise NotImplementedError()
 
+    @abstractmethod
     def authors_of_paper(self, doi: str) -> list[AuthorOfPaper]:
         raise NotImplementedError()
 
+    @abstractmethod
     def paper_titles_from_doi(self, dois: list[str]) -> list[str]:
         raise NotImplementedError()
 
@@ -67,7 +71,7 @@ class CrossRefApi(BaseAPI):
 
     def _abstract_of(self, data: dict):
         if "abstract" in data:
-            return helpers.html_to_plain(data["abstract"])
+            return helpers.html_to_plain(data["abstract"]).strip()
         return None
 
     def paper_by_doi(self, doi: str) -> Paper | None:
@@ -77,8 +81,8 @@ class CrossRefApi(BaseAPI):
 
         return Paper(
             doi=doi,
-            title=data["title"][0],
-            conference=get_event_title(data),
+            title=get_paper_title(data),
+            conference=get_event_title_short(data),
             year=(
                 data["published-print"]["date-parts"][0][0]
                 if "published-print" in data
@@ -100,21 +104,27 @@ class CrossRefApi(BaseAPI):
             if "DOI" in elm and "article-title" not in elm:
 
                 def tasklet(elm_dict: dict):
-                    local_data = self._fetch_paper(elm_dict["DOI"])
-                    if local_data is None:
-                        return
-                    elm_dict["year"] = (
-                        local_data["published-print"]["date-parts"][0][0]
-                        if "published-print" in local_data
-                        else None
-                    )
-                    elm_dict["article-title"] = local_data["title"][0]
-                    authors = local_data.get("author", [])
-                    if authors:
-                        author = authors[0]
-                        elm_dict["author"] = f"{author['given']} {author['family']}"
-                    elm_dict["journal-title"] = get_event_title(local_data)
-                    progress.increment()
+                    try:
+                        local_data = self._fetch_paper(elm_dict["DOI"])
+                        if local_data is None:
+                            return
+                        elm_dict["year"] = (
+                            local_data["published-print"]["date-parts"][0][0]
+                            if "published-print" in local_data
+                            else None
+                        )
+                        elm_dict["article-title"] = get_paper_title(local_data)
+                        authors = local_data.get("author", [])
+                        if authors:
+                            author = authors[0]
+                            elm_dict["author"] = f"{author['given']} {author['family']}"
+                        elm_dict["journal-title"] = get_event_title_short(local_data)
+                        progress.increment()
+                    except Exception as ex:
+                        print(
+                            f"Error enriching citation for {elm_dict['DOI']}: {ex}",
+                            file=sys.stderr,
+                        )
 
                 tasks.append(self._pool.submit(tasklet, elm))
 
@@ -172,9 +182,43 @@ def unify_none_and_dict(elm: dict | None) -> dict:
     return elm if elm else {}
 
 
-def get_event_title(res: dict) -> str | None:
+def get_event_title_short(res: dict) -> str | None:
     if "event" not in res:
         return None
     if "acronym" in res["event"]:
         return res["event"]["acronym"]
-    return res["event"]["name"]
+    return shorten_conference(res["event"]["name"])
+
+
+def get_paper_title(res: dict) -> str | None:
+    if "subtitle" not in res or len(res["subtitle"]) == 0:
+        if len(res["title"]) == 0:
+            return None
+        return res["title"][0]
+    return f"{res['title'][0]}: {res['subtitle'][0]}"
+
+
+def shorten_conference(conference_name: str) -> str:
+    # look for trailing "CGO 2024."
+    match = re.search(r"\.? ([A-Z-_\d+/]+) (\d{4})\.?$", conference_name)
+    if match is not None:
+        return f"{match.group(1)} '{int(match.group(2)) % 100:02}"
+
+    # look for starting "SC20: ..."
+    match = re.match(r"([A-Z-_\d+/]+\d\d):", conference_name)
+    if match is not None:
+        return match.group(1)
+
+    # look for ^.* <year> .* (conference-shorthand)$
+    match = re.search(r"((^|\s)\d\d(\d\d)?)? .*\(([^)]+)\)$", conference_name.strip())
+    if match is not None:
+        year: int | None = None
+        if match.group(1) is not None:
+            year = int(match.group(1).strip())
+
+        if year is not None:
+            return f"{match.group(4)} '{year % 100:02}"
+
+        return match.group(4)
+
+    return conference_name
