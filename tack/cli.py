@@ -33,11 +33,35 @@ class CLI:
         new_paper = db.add_paper(paper)
 
         if new_paper:
-            db.add_authors(doi, self._api.authors_of_paper(doi))
+            authors = self._api.authors_of_paper(doi)
+
+            for author in authors:
+                if author.orcid is None:
+                    matches = db.similar_authors(author.name)
+                    if not matches:
+                        continue
+                    print(f"No ORCID associated with {author.name}, but possible matches found in local database:")
+                    last_id = -1
+                    idx_to_author_id = {}
+                    for id, name, title, year in matches:
+                        if last_id != id:
+                            idx_to_author_id[len(idx_to_author_id)+1] = id
+                            print(f"({len(idx_to_author_id)}): {name}")
+                        print(f"  {title} ({year})")
+                    selection = input("\nSelect author id, or press enter to create a new author:")
+                    if not selection:
+                        continue
+                    if int(selection) not in idx_to_author_id:
+                        print("Invalid ID entered.")
+                    author.id = idx_to_author_id[int(selection)]
+
+            db.add_authors(doi, authors)
 
             print("fetching citations...")
 
             db.add_citations(doi, self._api.citations_by_doi(doi))
+
+
         else:
             print("Existing paper, not adding authors and citations to db...")
 
@@ -98,6 +122,8 @@ class CLI:
             cur.execute("DELETE FROM tags WHERE doi = ?", (doi,))
             cur.execute("DELETE FROM cites WHERE source_doi = ?", (doi,))
             cur.execute("DELETE FROM papers WHERE doi = ?", (doi,))
+            # delete trailing authors
+            cur.execute("DELETE FROM authors WHERE orcid is null and id not in (SELECT author_id FROM paper_authors)")
 
         print("Removed paper from db, not removing local file though.")
 
@@ -147,6 +173,13 @@ class CLI:
                 return 0
             case ("read-md", [doi]):
                 self.read_md(normalize_doi(doi))
+                return 0
+            case ("grep", args):
+                import subprocess
+                subprocess.run(
+                    ['rg', *args],
+                    cwd=db.get_paper_dir(),
+                )
                 return 0
             case ("help", _):
                 CLI.help()

@@ -49,18 +49,33 @@ You can list all added papers through: `tack list`.
 
 TODO: write more in-depth
 
-## Missing features:
+## (Missing) features:
 
-- A lot of references are not included
-- We can't reliably grab the abstract
-- We have some trouble with rate limits
-- We are currently deleting the notes when we re-generate a file
-- We need a tool to deduplicate authors at some point
-- tag management
-- markdown -> sqlite reader
-- Author list is broken?
-- settings management from cli
-- Have the `tack.db` be located in `$XDG_DATA_DIR` or something
-- Make `tack migrate` interactive or add interactive `tack init`
-- Allow manual adding
-- Maybe auto-download papers or something?
+- [ ] Grab references that don't have a DOI attached 
+- [ ] We can't reliably grab the abstract
+- [ ] We have some trouble with rate limits
+- [X] Read notes when regenerating a file
+- [ ] We need a tool to deduplicate authors at some point
+- [ ] tag management
+- [X] markdown -> sqlite reader
+- [X] Author list is broken?
+- [ ] settings management from cli
+- [ ] Have the `tack.db` be located in `$XDG_DATA_DIR` or something
+- [ ] Make `tack migrate` interactive or add interactive `tack init`
+- [X] Allow manual adding
+- [ ] Maybe auto-download papers or something?
+- [ ] Fix casing in all-uppercase submissions
+- [ ] ORCID API?
+- [ ] Datacite API?
+- [ ] Web-scraping extension?
+  - [ ] `dc.acm.org` can be scraped with `curl` 
+  - [ ] `dl.acm.org/doi/pdf/<doi>` can just be `wget`-ed :scream:
+- [X] Basic autocomplete
+  - [ ] Advanced Autocomplete 
+
+### Data Analysis Tools:
+
+- [ ] Most cited papers that you missed
+- [ ] Most read authors
+- [ ] Papers from popular authors that you haven't read
+- [ ] Popular papers from conferences you follow that you missed

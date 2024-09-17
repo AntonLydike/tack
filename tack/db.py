@@ -62,15 +62,18 @@ def add_authors(doi: str, authors: list[AuthorOfPaper]):
     with cursor() as cur:
         author_ids = []
         for author in authors:
-            result = cur.execute(
-                "INSERT OR IGNORE INTO authors (`orcid`, `name`) VALUES (?, ?) RETURNING id",
-                (author.orcid, author.name),
-            ).fetchone()
-            if result is None:
+            if author.id is None:
                 result = cur.execute(
-                    "SELECT id FROM authors WHERE orcid = ? LIMIT 1", (author.orcid,)
+                    "INSERT OR IGNORE INTO authors (`orcid`, `name`) VALUES (?, ?) RETURNING id",
+                    (author.orcid, author.name),
                 ).fetchone()
-            author_ids.append(result[0])
+                if result is None:
+                    result = cur.execute(
+                        "SELECT id FROM authors WHERE orcid = ? LIMIT 1", (author.orcid,)
+                    ).fetchone()
+                author_ids.append(result[0])
+            else:
+                author_ids.append(author.id)
 
         cur.executemany(
             "INSERT OR IGNORE INTO paper_authors (`doi`, `author_id`, `idx`, `affiliation`) VALUES (?, ?, ?, ?)",
@@ -87,6 +90,21 @@ def add_citations(doi: str, citations: list[Citation]):
             "INSERT INTO cites (source_doi, title, journal, doi, year, author) VALUES (?,?,?,?,?,?)",
             ((doi, c.title, c.journal, c.doi, c.year, c.author) for c in citations),
         )
+
+
+def similar_authors(name: str) -> list[tuple[int, str, str, int]]:
+    with cursor(read_only=True) as cur:
+        return cur.execute(
+            "SELECT authors.id, authors.name, papers.title, papers.year "
+            "FROM authors "
+            "CROSS JOIN paper_authors "
+            "CROSS JOIN papers "
+            "WHERE paper_authors.doi = papers.doi "
+            "  AND paper_authors.author_id = authors.id "
+            "  AND name = ? COLLATE NOCASE "
+            "ORDER BY authors.id, papers.year DESC",
+            (name,),
+        ).fetchall()
 
 
 def get_paper_dir() -> str:

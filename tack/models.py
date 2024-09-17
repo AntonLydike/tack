@@ -34,4 +34,3 @@ class CachedResponse:
     meta: str | None
     timestamp: int
     response: str
-
