@@ -1,5 +1,6 @@
 import json
 import os.path
+import shutil
 
 from tack import db
 from tack.api import BaseAPI, CrossRefApi
@@ -40,15 +41,19 @@ class CLI:
                     matches = db.similar_authors(author.name)
                     if not matches:
                         continue
-                    print(f"No ORCID associated with {author.name}, but possible matches found in local database:")
+                    print(
+                        f"No ORCID associated with {author.name}, but possible matches found in local database:"
+                    )
                     last_id = -1
                     idx_to_author_id = {}
                     for id, name, title, year in matches:
                         if last_id != id:
-                            idx_to_author_id[len(idx_to_author_id)+1] = id
+                            idx_to_author_id[len(idx_to_author_id) + 1] = id
                             print(f"({len(idx_to_author_id)}): {name}")
                         print(f"  {title} ({year})")
-                    selection = input("\nSelect author id, or press enter to create a new author:")
+                    selection = input(
+                        "\nSelect author id, or press enter to create a new author:"
+                    )
                     if not selection:
                         continue
                     if int(selection) not in idx_to_author_id:
@@ -60,7 +65,6 @@ class CLI:
             print("fetching citations...")
 
             db.add_citations(doi, self._api.citations_by_doi(doi))
-
 
         else:
             print("Existing paper, not adding authors and citations to db...")
@@ -123,7 +127,9 @@ class CLI:
             cur.execute("DELETE FROM cites WHERE source_doi = ?", (doi,))
             cur.execute("DELETE FROM papers WHERE doi = ?", (doi,))
             # delete trailing authors
-            cur.execute("DELETE FROM authors WHERE orcid is null and id not in (SELECT author_id FROM paper_authors)")
+            cur.execute(
+                "DELETE FROM authors WHERE orcid is null and id not in (SELECT author_id FROM paper_authors)"
+            )
 
         print("Removed paper from db, not removing local file though.")
 
@@ -174,10 +180,13 @@ class CLI:
             case ("read-md", [doi]):
                 self.read_md(normalize_doi(doi))
                 return 0
+            case ("pdf", [doi, path]):
+                self.add_pdf(normalize_doi(doi), path)
             case ("grep", args):
                 import subprocess
+
                 subprocess.run(
-                    ['rg', *args],
+                    ["rg", *args],
                     cwd=db.get_paper_dir(),
                 )
                 return 0
@@ -227,6 +236,18 @@ class CLI:
                     (doi, key, json.dumps(val)),
                 )
                 print(f"Read metadata {key} = {val}")
+
+    def add_pdf(self, doi, path):
+        agency, number = path_safe_doi(doi)
+        dest = db.get_paper_dir()
+        os.makedirs((os.path.join(dest, 'pdf')), exist_ok=True)
+        shutil.copy(path, os.path.join(dest, "pdf", f"{agency}_{number}.pdf"))
+        with db.cursor() as cur:
+            cur.execute(
+                "INSERT OR REPLACE INTO tags (doi, name, value) VALUES (?,?,?)",
+                (doi, "pdf", f'"[[pdf/{agency}_{number}.pdf]]"'),
+            )
+        self.create_note(doi)
 
 
 def build_paper_meta_dict(

@@ -11,6 +11,16 @@ log = logging.getLogger(__name__)
 _CONNECTIONS: list[sqlite3.Connection] = list()
 
 
+def get_local_db_file_path() -> str:
+    if "XDG_DATA_HOME" in os.environ:
+        data_dir = os.environ.get("XDG_DATA_HOME")
+    else:
+        data_dir = os.path.join(os.environ.get("HOME"), ".local", "share")
+    conf_dir = os.path.join(data_dir, "tack")
+    os.makedirs(conf_dir, exist_ok=True)
+    return os.path.join(conf_dir, "tack.db")
+
+
 @contextmanager
 def cursor(read_only: bool = False) -> ContextManager[sqlite3.Cursor]:
     """
@@ -19,7 +29,7 @@ def cursor(read_only: bool = False) -> ContextManager[sqlite3.Cursor]:
     Connections are automatically committed if no exception occurred.
     """
     if not _CONNECTIONS:
-        conn = sqlite3.connect("tack.db", check_same_thread=False)
+        conn = sqlite3.connect(get_local_db_file_path(), check_same_thread=False)
     else:
         conn = _CONNECTIONS.pop()
     cur = conn.cursor()
@@ -69,7 +79,8 @@ def add_authors(doi: str, authors: list[AuthorOfPaper]):
                 ).fetchone()
                 if result is None:
                     result = cur.execute(
-                        "SELECT id FROM authors WHERE orcid = ? LIMIT 1", (author.orcid,)
+                        "SELECT id FROM authors WHERE orcid = ? LIMIT 1",
+                        (author.orcid,),
                     ).fetchone()
                 author_ids.append(result[0])
             else:
