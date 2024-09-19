@@ -190,6 +190,14 @@ class CLI:
                     cwd=db.get_paper_dir(),
                 )
                 return 0
+            case ("git", args):
+                import subprocess
+
+                subprocess.run(
+                    ["git", *args],
+                    cwd=db.get_paper_dir(),
+                )
+                return 0
             case ("help", _):
                 CLI.help()
                 return 0

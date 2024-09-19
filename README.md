@@ -60,7 +60,7 @@ TODO: write more in-depth
 - [X] markdown -> sqlite reader
 - [X] Author list is broken?
 - [ ] settings management from cli
-- [ ] Have the `tack.db` be located in `$XDG_DATA_DIR` or something
+- [X] Have the `tack.db` be located in `$XDG_DATA_DIR` or something
 - [ ] Make `tack migrate` interactive or add interactive `tack init`
 - [X] Allow manual adding
 - [ ] Maybe auto-download papers or something?
@@ -72,6 +72,7 @@ TODO: write more in-depth
   - [ ] `dl.acm.org/doi/pdf/<doi>` can just be `wget`-ed :scream:
 - [X] Basic autocomplete
   - [ ] Advanced Autocomplete 
+- [ ] BibTex Export
 
 ### Data Analysis Tools:
 

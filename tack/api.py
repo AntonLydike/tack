@@ -52,7 +52,7 @@ class CrossRefApi(BaseAPI):
             )
         )
         self._pool = ThreadPoolExecutor(8)
-        self._rate_limit = helpers.RateLimiter(7, 2, random_stagger=1)
+        self._rate_limit = helpers.RateLimiter(5, 2, random_stagger=1.5)
 
     @lru_cache()
     def _fetch_paper(self, doi: str) -> dict | None:

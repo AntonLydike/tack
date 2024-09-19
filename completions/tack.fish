@@ -50,3 +50,4 @@ complete -c tack -n "__fish_last_arg_is_from read-md remove pdf" -a "(__tack_com
 complete -c tack -n "__fish_arguments_match tack pdf '?'" -F
 
 complete -c tack -n "__fish_arguments_match tack grep"` -C "rg"
+complete -c tack -n "__fish_arguments_match tack git"` -C "git"
