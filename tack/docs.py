@@ -166,7 +166,7 @@ def write_markdown(doc: MarkdownFile):
         f.write(f"\n# {doc.title}")
         if doc.abstract:
             f.write(f"\n\n## Abstract:\n{doc.abstract}")
-        f.write(f"\n\n## Notes:\n{doc.notes}")
+        f.write(f"\n\n## Notes:\n{doc.notes if doc.notes is not None else ''}")
         f.write(f"\n\n## References:\n")
         f.write("\n".join(doc.references))
 

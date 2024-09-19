@@ -1,6 +1,8 @@
 import json
 import os.path
 import shutil
+from collections.abc import Sequence
+from typing import Iterable
 
 from tack import db
 from tack.api import BaseAPI, CrossRefApi
@@ -19,6 +21,9 @@ class CLI:
         self._api = CrossRefApi()
 
     def add(self, doi: str):
+        """
+        Add a paper to the collection. Search by DOI number.
+        """
         print(f"fetching {doi}...")
         paper = self._api.paper_by_doi(doi)
         if paper is None:
@@ -73,6 +78,9 @@ class CLI:
         self.create_note(doi)
 
     def migrate_db(self):
+        """
+        Ensure the database exists and has the correct format.
+        """
         db.migrate()
 
     def create_note(self, doi: str):
@@ -106,7 +114,7 @@ class CLI:
             ),
             title,
             abstract,
-            "",
+            None,
             list(build_refs(db.get_paper_citations(doi))),
         )
 
@@ -121,6 +129,9 @@ class CLI:
         print("Generated paper entry!")
 
     def remove(self, doi: str):
+        """
+        Remove a paper from the database (without deleting the local markdown file).
+        """
         with db.cursor() as cur:
             cur.execute("DELETE FROM paper_authors WHERE doi = ?", (doi,))
             cur.execute("DELETE FROM tags WHERE doi = ?", (doi,))
@@ -134,6 +145,9 @@ class CLI:
         print("Removed paper from db, not removing local file though.")
 
     def list(self, args: list[str]):
+        """
+        List papers added to the database, optionally with --json to print as JSON lines
+        """
         parser = argparse.ArgumentParser("tack list")
         parser.add_argument("--json", action="store_true")
         opts = parser.parse_args(args)
@@ -199,17 +213,43 @@ class CLI:
                 )
                 return 0
             case ("help", _):
-                CLI.help()
+                self.help()
                 return 0
 
         print("unknown command")
         return 1
 
-    @classmethod
     def help(self):
-        pass
+        print(f"""{self._name} -- A tool to catalogue your read papers
+        
+USAGE: {self._name} COMMAND (ARGS*)
+
+COMMANDS:""")
+
+        commands = {
+            "add": docstr_to_pars(CLI.add.__doc__),
+            "pdf": docstr_to_pars(CLI.add_pdf.__doc__),
+            "list": docstr_to_pars(CLI.list.__doc__),
+            "read-md": docstr_to_pars(CLI.read_md.__doc__),
+            "remove": docstr_to_pars(CLI.remove.__doc__),
+            "migrate": docstr_to_pars(CLI.migrate_db.__doc__),
+            "git": ("Wrapper around git inside the paper directory.",),
+            "grep": ("Wrapper around ripgrep inside the paper directory.",),
+        }
+        width = min(shutil.get_terminal_size((80, 20)).columns, 100)
+        name_width = max(len(k) for k in commands) + 8
+        spacer = " " * name_width
+
+        for name, pars in commands.items():
+            print(f"{name:<{name_width}}", end="")
+            for p in break_pars(pars, width-name_width):
+                print(f"{p}\n{spacer}", end="")
+            print("\r", end="")
 
     def read_md(self, doi: str):
+        """
+        Read changes made in the markdown file into the database.
+        """
         repo_dir = db.get_paper_dir()
         agency, number = path_safe_doi(doi)
         fpath = os.path.join(repo_dir, agency, f"{number}.md")
@@ -246,6 +286,10 @@ class CLI:
                 print(f"Read metadata {key} = {val}")
 
     def add_pdf(self, doi, path):
+        """
+        Add a pdf for a given paper. Takes a doi and a path to a paper and puts the pdf inside the paper directory. Also
+        adds the paper as a link in the frontmatter of paper note.
+        """
         agency, number = path_safe_doi(doi)
         dest = db.get_paper_dir()
         os.makedirs((os.path.join(dest, 'pdf')), exist_ok=True)
@@ -280,13 +324,58 @@ def build_paper_meta_dict(
     }
 
 
+def docstr_to_pars(docstr: str) -> tuple[str, ...]:
+    """
+    Clean a docstring and convert it to a list of paragraphs.
+    """
+    pars = []
+    par = []
+    for line in docstr.split('\n'):
+        line = line.strip()
+        if not line and par:
+            pars.append(" ".join(par))
+            par = []
+            continue
+        if not line:
+            continue
+        par.append(line)
+    if par:
+        pars.append(" ".join(par))
+    return tuple(pars)
+
+
+def break_pars(pars: Sequence[str], par_len: int) -> Iterable[str]:
+    is_first = True
+    for par in pars:
+        if not is_first:
+            yield ""
+        is_first = False
+
+        layout_par = []
+        size = 0
+        for w in par.split(' '):
+            if size + len(w) > par_len:
+                if not layout_par:
+                    yield w
+                    continue
+                yield " ".join(layout_par)
+                layout_par = [w]
+                size = len(w) + 1
+                continue
+            layout_par.append(w)
+            size += len(w) + 1
+        if layout_par:
+            yield " ".join(layout_par)
+
+
 def main():
     import sys
 
     if len(sys.argv) < 2:
-        CLI.help()
+        CLI("tack").help()
         sys.exit(1)
 
     name, cmd, *args = sys.argv
+    name = os.path.basename(name)
 
     sys.exit(CLI(name).run(cmd, *args))
