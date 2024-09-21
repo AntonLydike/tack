@@ -17,7 +17,7 @@ function __fish_last_arg_is_from
 end
 
 function __tack_completions_list_papers
-    tack list --json | jq -r '"\(.doi)\t\(.conference | .[:20]) - \(.title | .[:60])"'
+    tack-completions list jsonl | jq -r '"\(.doi)\t\(.conference | .[:20]) - \(.title | .[:60])"'
 end
 
 function __fish_arguments_match

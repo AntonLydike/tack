@@ -63,6 +63,7 @@ class CLI:
                         continue
                     if int(selection) not in idx_to_author_id:
                         print("Invalid ID entered.")
+                        # FIXME: retry
                     author.id = idx_to_author_id[int(selection)]
 
             db.add_authors(doi, authors)

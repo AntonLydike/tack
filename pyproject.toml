@@ -8,6 +8,7 @@ readme = "README.md"
 
 [tool.poetry.scripts]
 tack = "tack.cli:main"
+tack-completions = "tack.complete:main"
 
 [tool.poetry.dependencies]
 python = "^3.10"
